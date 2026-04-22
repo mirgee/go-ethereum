@@ -630,6 +630,14 @@ func (q *queue) DeliverReceipts(id string, receiptList []rlp.RawValue, receiptLi
 
 	validate := func(index int, header *types.Header) error {
 		if receiptListHashes[index] != header.ReceiptHash {
+      log.Error("DBG DeliverReceipts mismatch",
+          "index", index,
+          "headerNumber", header.Number,
+          "headerHash", header.Hash(),
+          "expectedReceiptRoot", header.ReceiptHash,
+          "gotReceiptRoot", receiptListHashes[index],
+          "batchResultsLen", len(receiptList),
+      )
 			return errInvalidReceipt
 		}
 		return nil

@@ -514,6 +514,11 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		return fmt.Errorf("Receipts: %w", err)
 	}
 	receiptLists, err := res.List.Items()
+	peer.Log().Info("DBG handleReceipts70 decoded",
+		"reqid", res.RequestId,
+		"lastBlockIncomplete", res.LastBlockIncomplete,
+		"listCount", len(receiptLists),
+	)
 	if err != nil {
 		return fmt.Errorf("Receipts: %w", err)
 	}
@@ -540,6 +545,12 @@ func dispatchReceipts(requestId uint64, receiptLists []*ReceiptList, peer *Peer)
 		hashes := make([]common.Hash, len(receiptLists))
 		for i := range receiptLists {
 			hashes[i] = types.DeriveSha(receiptLists[i].Derivable(), hasher)
+			peer.Log().Info("DBG dispatchReceipts derived",
+				"reqid", requestId,
+				"idx", i,
+				"itemCount", receiptLists[i].items.Len(),
+				"derivedRoot", hashes[i],
+			)
 		}
 		return hashes
 	}
@@ -547,6 +558,12 @@ func dispatchReceipts(requestId uint64, receiptLists []*ReceiptList, peer *Peer)
 	var enc ReceiptsRLPResponse
 	for i := range receiptLists {
 		encReceipts, err := receiptLists[i].EncodeForStorage()
+    peer.Log().Info("DBG dispatchReceipts encodeForStorage",
+        "reqid", requestId,
+        "idx", i,
+        "itemCount", receiptLists[i].items.Len(),
+        "encStorageBytes", len(encReceipts),
+    )
 		if err != nil {
 			return fmt.Errorf("Receipts: invalid list %d: %v", i, err)
 		}

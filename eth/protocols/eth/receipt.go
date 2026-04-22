@@ -18,12 +18,14 @@ package eth
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"iter"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -97,6 +99,7 @@ func (r *Receipt) decode(input []byte) error {
 		return fmt.Errorf("inner list: %v", err)
 	}
 
+  log.Error("Raw input before split: %s", hex.EncodeToString(input))
 	// txType
 	var txType uint64
 	txType, input, err = rlp.SplitUint64(input)
@@ -196,9 +199,16 @@ func (rl *ReceiptList) Derivable() types.DerivableList {
 	var bloomBuf [6]byte
 	return newDerivableRawList(&rl.items, func(data []byte, outbuf *bytes.Buffer) {
 		var r Receipt
-		if r.decode(data) == nil {
-			r.encodeForHash(&bloomBuf, outbuf)
+    log.Error("DBG deriving list for encoding")
+		if err := r.decode(data); err != nil {
+			log.Error("DBG receipt decode failed for hash derivation",
+				"err", err,
+				"rawLen", len(data),
+				"rawPrefix", fmt.Sprintf("%x", data[:min(32, len(data))]),
+			)
+			return
 		}
+		r.encodeForHash(&bloomBuf, outbuf)
 	})
 }
 
