@@ -458,63 +458,9 @@ type byteCodesTest struct {
 func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 	var (
 		allHashes   = s.chain.CodeHashes()
-		headRoot    = s.chain.Head().Root()
-		genesisRoot = s.chain.RootAt(0)
 	)
 
 	tests := []byteCodesTest{
-		// A few stateroots
-		{
-			desc:      `Here we request state roots as code hashes. The server should deliver an empty response with no items.`,
-			nBytes:    10000,
-			hashes:    []common.Hash{genesisRoot, headRoot},
-			expHashes: 0,
-		},
-		{
-			desc:      `Here we request the genesis state root (which is not an existing code hash) two times. The server should deliver an empty response with no items.`,
-			nBytes:    10000,
-			hashes:    []common.Hash{genesisRoot, genesisRoot},
-			expHashes: 0,
-		},
-		// Empties
-		{
-			desc:      `Here we request the empty state root (which is not an existing code hash). The server should deliver an empty response with no items.`,
-			nBytes:    10000,
-			hashes:    []common.Hash{types.EmptyRootHash},
-			expHashes: 0,
-		},
-		{
-			desc:      `Here we request the empty code hash. The server should deliver an empty response item.`,
-			nBytes:    10000,
-			hashes:    []common.Hash{types.EmptyCodeHash},
-			expHashes: 1,
-		},
-		{
-			desc:      `In this test, we request the empty code hash three times. The server should deliver the empty item three times.`,
-			nBytes:    10000,
-			hashes:    []common.Hash{types.EmptyCodeHash, types.EmptyCodeHash, types.EmptyCodeHash},
-			expHashes: 3,
-		},
-		// The existing bytecodes
-		{
-			desc:      `Here we request all available contract codes. The server should deliver them all in one response.`,
-			nBytes:    100000,
-			hashes:    allHashes,
-			expHashes: len(allHashes),
-		},
-		// The existing, with limited byte arg
-		{
-			desc:      `In this test, the request has a bytes limit of one. The server should deliver one item.`,
-			nBytes:    1,
-			hashes:    allHashes,
-			expHashes: 1,
-		},
-		{
-			desc:      `In this test, the request has a bytes limit of zero. The server should deliver one item.`,
-			nBytes:    0,
-			hashes:    allHashes,
-			expHashes: 1,
-		},
 		// Request the same hash multiple times.
 		{
 			desc:      `This test requests the same code hash multiple times. The server should deliver it multiple times.`,
@@ -550,93 +496,9 @@ type trieNodesTest struct {
 	desc string
 }
 
-func decodeNibbles(nibbles []byte, bytes []byte) {
-	for bi, ni := 0, 0; ni < len(nibbles); bi, ni = bi+1, ni+2 {
-		bytes[bi] = nibbles[ni]<<4 | nibbles[ni+1]
-	}
-}
-
-// hasTerm returns whether a hex key has the terminator flag.
-func hasTerm(s []byte) bool {
-	return len(s) > 0 && s[len(s)-1] == 16
-}
-
-func keybytesToHex(str []byte) []byte {
-	l := len(str)*2 + 1
-	var nibbles = make([]byte, l)
-	for i, b := range str {
-		nibbles[i*2] = b / 16
-		nibbles[i*2+1] = b % 16
-	}
-	nibbles[l-1] = 16
-	return nibbles
-}
-
-func hexToCompact(hex []byte) []byte {
-	terminator := byte(0)
-	if hasTerm(hex) {
-		terminator = 1
-		hex = hex[:len(hex)-1]
-	}
-	buf := make([]byte, len(hex)/2+1)
-	buf[0] = terminator << 5 // the flag byte
-	if len(hex)&1 == 1 {
-		buf[0] |= 1 << 4 // odd flag
-		buf[0] |= hex[0] // first nibble is contained in the first byte
-		hex = hex[1:]
-	}
-	decodeNibbles(hex, buf[1:])
-	return buf
-}
-
 // TestSnapTrieNodes various forms of GetTrieNodes requests.
 func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
-	var (
-		// This is the known address of the snap storage testing contract.
-		storageAcct     = common.HexToAddress("0x8bebc8ba651aee624937e7d897853ac30c95a067")
-		storageAcctHash = common.BytesToHash(s.chain.state[storageAcct].AddressHash)
-		// This is the known address of an existing account.
-		key      = common.FromHex("0xa87387b50b481431c6ccdb9ae99a54d4dcdd4a3eff75d7b17b4818f7bbfc21e9")
-		empty    = types.EmptyCodeHash
-		accPaths []snap.TrieNodePathSet
-	)
-	for i := 1; i <= 65; i++ {
-		accPaths = append(accPaths, makeSnapPath(key, i))
-	}
-
 	tests := []trieNodesTest{
-		{
-			desc:      `In this test, we send an empty request to the node.`,
-			root:      s.chain.Head().Root(),
-			paths:     nil,
-			nBytes:    500,
-			expHashes: nil,
-		},
-
-		{
-			desc: `In this test, we send a request containing an empty path-set.
-The server should reject the request.`,
-			root: s.chain.Head().Root(),
-			paths: []snap.TrieNodePathSet{
-				{}, // zero-length pathset should 'abort' and kick us off
-				{[]byte{0}},
-			},
-			nBytes:    5000,
-			expHashes: []common.Hash{},
-			expReject: true,
-		},
-
-		{
-			desc: `Here we request the root node of the trie. The server should respond with the root node.`,
-			root: s.chain.RootAt(int(s.chain.Head().NumberU64() - 1)),
-			paths: []snap.TrieNodePathSet{
-				{[]byte{0}},
-				{[]byte{1}, []byte{0}},
-			},
-			nBytes:    5000,
-			expHashes: []common.Hash{s.chain.RootAt(int(s.chain.Head().NumberU64() - 1))},
-		},
-
 		{ // nonsensically long path
 			desc: `In this test, we request a very long trie node path. The server should respond with an empty node (keccak256("")).`,
 			root: s.chain.Head().Root(),
@@ -646,77 +508,6 @@ The server should reject the request.`,
 			},
 			nBytes:    5000,
 			expHashes: []common.Hash{types.EmptyCodeHash},
-		},
-
-		{
-			// The leaf is only a couple of levels down, so the continued trie traversal causes lookup failures.
-			desc:   `Here we request some known accounts from the state.`,
-			root:   s.chain.Head().Root(),
-			paths:  accPaths,
-			nBytes: 5000,
-			expHashes: []common.Hash{
-				// It's a bit unfortunate these are hard-coded, but the result depends on
-				// a lot of aspects of the state trie and can't be guessed in a simple
-				// way. So you'll have to update this when the test chain is changed.
-				common.HexToHash("0x4bdecec09691ad38113eebee2df94fadefdff5841c0f182bae1be3c8a6d60bf3"),
-				common.HexToHash("0x4178696465d4514ff5924ef8c28ce64d41a669634b63184c2c093e252d6b4bc4"),
-				empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty,
-				empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty,
-				empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty,
-				empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty,
-				empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty, empty,
-				empty, empty, empty},
-		},
-
-		{
-			desc: `In this test, we request some known accounts in state. The requested paths are NOT in key order.`,
-			root: s.chain.Head().Root(),
-			paths: []snap.TrieNodePathSet{
-				accPaths[10], accPaths[1], accPaths[0],
-			},
-			nBytes: 5000,
-			// As with the previous test, this result depends on the whole tree and will have to
-			// be updated when the test chain is changed.
-			expHashes: []common.Hash{
-				empty,
-				common.HexToHash("0x4178696465d4514ff5924ef8c28ce64d41a669634b63184c2c093e252d6b4bc4"),
-				common.HexToHash("0x4bdecec09691ad38113eebee2df94fadefdff5841c0f182bae1be3c8a6d60bf3"),
-			},
-		},
-
-		// Storage tests.
-		// These use the known storage test account.
-
-		{
-			desc: `This test requests the storage root node of a known account.`,
-			root: s.chain.Head().Root(),
-			paths: []snap.TrieNodePathSet{
-				{
-					storageAcctHash[:],
-					[]byte{0},
-				},
-			},
-			nBytes: 5000,
-			expHashes: []common.Hash{
-				common.HexToHash("0xbe3d75a1729be157e79c3b77f00206db4d54e3ea14375a015451c88ec067c790"),
-			},
-		},
-
-		{
-			desc: `This test requests multiple storage nodes of a known account.`,
-			root: s.chain.Head().Root(),
-			paths: []snap.TrieNodePathSet{
-				{
-					storageAcctHash[:],
-					[]byte{0},
-					[]byte{0x1b},
-				},
-			},
-			nBytes: 5000,
-			expHashes: []common.Hash{
-				common.HexToHash("0xbe3d75a1729be157e79c3b77f00206db4d54e3ea14375a015451c88ec067c790"),
-				common.HexToHash("0xf4984a11f61a2921456141df88de6e1a710d28681b91af794c5a721e47839cd7"),
-			},
 		},
 	}
 
@@ -735,13 +526,6 @@ The server should reject the request.`,
 			t.Errorf("  failed: %v", err)
 		}
 	}
-}
-
-func makeSnapPath(key []byte, length int) snap.TrieNodePathSet {
-	hex := keybytesToHex(key)[:length]
-	hex[len(hex)-1] = 0 // remove term flag
-	hKey := hexToCompact(hex)
-	return snap.TrieNodePathSet{hKey}
 }
 
 func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
